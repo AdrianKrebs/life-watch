@@ -10,7 +10,7 @@ import type { Birth } from './config';
 export const BEATS_PER_SECOND = 5;
 export const BALANCE_AMPLITUDE = (280 * Math.PI) / 180;
 /** Balance lift: the arc during which the impulse pin is inside the fork slot. */
-export const LIFT_ANGLE = (48 * Math.PI) / 180;
+export const LIFT_ANGLE = (44 * Math.PI) / 180; // 10.25° fork travel × lever length / impulse radius
 /** Fork travel bank to bank is 10.25°; it rests on a banking pin either side. */
 export const FORK_BANKING = (5.125 * Math.PI) / 180;
 /** Beats in one day; every train period divides it, so wheel phases stay exact. */
@@ -245,7 +245,7 @@ export function nextLeapDayEve(fromMs: number, lead = 12) {
 	}
 }
 
-/** Feb 28 → Mar 1 in a common year: the date star skips three teeth. */
+/** Feb 28 → Mar 1 in a common year: the date star jumps four teeth, past 29, 30 and 31. */
 export function nextShortFebruaryEnd(fromMs: number, lead = 12) {
 	let y = new Date(fromMs).getFullYear();
 	for (;;) {

@@ -157,7 +157,7 @@ function Controls({ audio, config }: { audio: TickAudio; config: ResolvedConfig 
 				<button type="button" onClick={() => jump(nextMonthEnd)} title="Seven seconds before the end of this month">
 					Month end
 				</button>
-				<button type="button" onClick={() => jump(nextShortFebruaryEnd)} title="28 February → 1 March: the date star skips three teeth">
+				<button type="button" onClick={() => jump(nextShortFebruaryEnd)} title="28 February → 1 March: the date star jumps four teeth, past 29, 30 and 31">
 					28 Feb
 				</button>
 				<button type="button" onClick={() => jump(nextLeapDayEve)} title="The next 29 February">

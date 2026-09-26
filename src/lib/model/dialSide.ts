@@ -26,6 +26,8 @@ import { birthdayLabel, type ResolvedConfig } from '../config';
 import { dampAngle, meshPhase, type Part } from './part';
 
 const TAU = Math.PI * 2;
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
 const dir = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.atan2(b.y - a.y, b.x - a.x);
 const O = { x: 0, y: 0 };
 
@@ -43,6 +45,28 @@ class Jumps {
 	}
 }
 
+// Grand lever geometry (dial-side coordinates, mm).
+const DAY_WHEEL = MOTION.dayWheel;
+/** Snail step direction at midnight, pointing at the lever's feeler. */
+const SNAIL_STEP = (70.6 * Math.PI) / 180;
+const SNAIL_R0 = 2.5;
+/** Feeler resting on the snail just after midnight. */
+const FEELER_SNAIL: Vec2 = [DAY_WHEEL.x + SNAIL_R0 * Math.cos(SNAIL_STEP), DAY_WHEEL.y + SNAIL_R0 * Math.sin(SNAIL_STEP)];
+const FEELER_ARM = Math.hypot(FEELER_SNAIL[0] - CALENDAR.grandLeverPivot.x, FEELER_SNAIL[1] - CALENDAR.grandLeverPivot.y);
+const LEVER_LIFT = (3.2 * Math.PI) / 180;
+const SNAIL_RISE = LEVER_LIFT * FEELER_ARM;
+/** Feeler on the 48-month cam, at its top tangent point. */
+const FEELER_CAM: Vec2 = [7.26, 3.16];
+/** Beak at the date star's 3 o'clock, on the line from the pivot through the star's centre. */
+const BEAK: Vec2 = (() => {
+	const P = CALENDAR.grandLeverPivot;
+	const d = Math.hypot(P.x, P.y);
+	const r = CALENDAR.dateStar.r - 0.1;
+	return [(-P.x / d) * r, (-P.y / d) * r];
+})();
+/** Lever rotation that moves the beak one date-star tooth. */
+const TOOTH_ON_LEVER = (TAU * CALENDAR.dateStar.r) / CALENDAR.dateStar.teeth / Math.hypot(BEAK[0] - CALENDAR.grandLeverPivot.x, BEAK[1] - CALENDAR.grandLeverPivot.y);
+
 export function buildDialSide(M: Mats, config: ResolvedConfig) {
 	const parts: Part[] = [];
 	const add = (p: Part) => {
@@ -52,7 +76,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 	const jumps = new Jumps();
 
 	// Shared per-frame calendar angles (computed once, read by stars, hands, jumpers).
-	const cal = { date: 0, day: 0, month: 0, leap: 0, dateLag: 0, dayLag: 0, monthLag: 0 };
+	const cal = { date: 0, day: 0, month: 0, leap: 0, dateLag: 0, dayLag: 0, monthLag: 0, dateTeeth: 0 };
 	let lastState: WatchState | null = null;
 	const updateCalendar = (state: WatchState, dt: number) => {
 		if (state === lastState) return;
@@ -61,7 +85,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 		// 1 January 1970 was a Thursday.
 		const dayTarget = -((((state.daySteps + 4) % 7) + 7) % 7) / 7 * TAU;
 		const monthTarget = -(((state.monthSteps % 12) + 0.5) / 12) * TAU;
-		const leapTarget = -((state.leapCycleMonth + 6) / 48) * TAU;
+		const leapTarget = -((state.leapCycleMonth + 0.5) / 48) * TAU;
 		cal.date = jumps.get('date', dateTarget, TAU, dt);
 		cal.day = jumps.get('day', dayTarget, TAU, dt);
 		cal.month = jumps.get('month', monthTarget, TAU, dt);
@@ -72,6 +96,11 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 			return Math.min(1, Math.abs(d) / pitch);
 		};
 		cal.dateLag = lag(cal.date, dateTarget, TAU / 31);
+		{
+			let d = dateTarget - cal.date;
+			d -= TAU * Math.round(d / TAU);
+			cal.dateTeeth = Math.abs(d) / (TAU / 31);
+		}
 		cal.dayLag = lag(cal.day, dayTarget, TAU / 7);
 		cal.monthLag = lag(cal.month, monthTarget, TAU / 12);
 	};
@@ -110,7 +139,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 		g.add(w);
 		g.add(pinion(M, mw.pinion, mw.pinionModule, hw.teeth, -2.33, 0.36));
 		g.add(arbor(M, 0.2, -2.6, -1.85));
-		const part = add({ id: 'minuteWheel', name: 'Minute wheel', info: '36 teeth and a 10-leaf pinion: the 12:1 reduction from minutes to hours.', group: 'motion', layer: 2.7, object: g });
+		const part = add({ id: 'minuteWheel', name: 'Minute wheel', info: 'Driven 3:1 by the cannon pinion; its 10-leaf pinion drives the hour wheel 4:1, 12:1 in all.', group: 'motion', layer: 2.7, object: g });
 		part.update = ({ state }) => {
 			g.rotation.z = TAU * turns(state.trainBeats, BEATS_PER_TURN.centre * 3);
 		};
@@ -147,9 +176,11 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 		// Snail cam: its radius grows through the day and drops at midnight.
 		const snail: Vec2[] = [];
 		const n = 96;
+		// The step faces the grand lever's feeler at midnight; its rise over
+		// the day is exactly what cocks the lever by LEVER_LIFT.
 		for (let i = 0; i <= n; i++) {
-			const a = Math.PI / 2 + (i / n) * TAU * 0.985;
-			const r = 1.25 + 2.3 * (i / n);
+			const a = SNAIL_STEP + (i / n) * TAU * 0.985;
+			const r = SNAIL_R0 + SNAIL_RISE * (i / n);
 			snail.push([r * Math.cos(a), r * Math.sin(a)]);
 		}
 		g.add(slab(polyShape(snail), -1.97, -1.83, M.steel, M.anglage, { bevel: 0.03 }));
@@ -176,7 +207,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 			circle(SUBDIALS.seconds.x, SUBDIALS.seconds.y, 0.5),
 			...AGE_DISCS.map((d) => circle(d.x, d.y, 0.45)),
 			box(0, DAYS_WINDOW.y, 2.35, 1.95, 0, 0.5),
-			circle(-9.7, -6.35, 1.2), // window for the grand lever's feeler
+			circle(...FEELER_SNAIL, 0.9), // window for the grand lever's feeler
 			// Lightening cut-outs, as on a real calendar plate.
 			...[0.9, 2.1, 3.3, 4.4].map((a) => capsule(12.8 * Math.cos(a + 0.35), 12.8 * Math.sin(a + 0.35), 12.8 * Math.cos(a + 0.75), 12.8 * Math.sin(a + 0.75), 0.9)),
 		];
@@ -188,7 +219,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 			[-12.9, 9.4],
 			[13.4, 8.7],
 			[11.2, -11.9],
-			[-13.2, -9.8],
+			[-6, -16],
 		] as Vec2[]) {
 			g.add(screw(M, x, y, -1.4, 1, 0.75));
 		}
@@ -199,13 +230,15 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 	{
 		const P = CALENDAR.grandLeverPivot;
 		const L = (x: number, y: number): Vec2 => [x - P.x, y - P.y];
+		// The arm runs round the centre pipes; the beak meets the date star at
+		// its 3 o'clock, where the lever's swing is tangential to the star.
 		const arcR = 3.75;
 		const a0 = (150 * Math.PI) / 180;
-		const a1 = (18 * Math.PI) / 180;
+		const a1 = (20 * Math.PI) / 180;
 		const A1: Vec2 = [arcR * Math.cos(a0), arcR * Math.sin(a0)];
 		const A2: Vec2 = [arcR * Math.cos(a1), arcR * Math.sin(a1)];
-		const F1: Vec2 = [-10.15, -6.25]; // feeler on the 24-hour snail
-		const F2: Vec2 = [CALENDAR.leapCam.x - CALENDAR.leapCam.r + 0.1, 0.35]; // feeler on the 48-month cam
+		const F1 = FEELER_SNAIL;
+		const F2 = FEELER_CAM;
 		const arcSdf = arc(-P.x, -P.y, arcR, a1, a0, 0.72);
 		const sdf = smoothUnion(
 			0.55,
@@ -216,34 +249,36 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 			capsule(...L(...A2), ...L(...F2), 0.36, 0.22),
 			capsule(...L(P.x, P.y), ...L(...F1), 0.5, 0.3),
 			circle(...L(...F1), 0.34),
-			// The beak that works the date star.
-			capsule(...L(0.2, arcR), ...L(0.95, arcR + 0.55), 0.18, 0.08),
+			capsule(...L(...A2), ...L(...BEAK), 0.22, 0.1),
 		);
 		const shapes = sdfShapes(sdf, { minX: -3, minY: -9, maxX: 24, maxY: 9.5 }, 0.035);
 		const g = new THREE.Group();
 		g.position.set(P.x, P.y, 0);
 		const inner = new THREE.Group();
 		inner.add(slab(shapes, -1.34, -1.14, M.steel, M.anglage, { bevel: 0.035 }));
+		// Pins carry the beak up to the date star and the feeler down to the snail.
+		const beakPin = pipe(M.steel, 0.1, 0, -1.14, -0.84, 12);
+		beakPin.position.set(...L(...BEAK), 0);
+		inner.add(beakPin);
+		const feelerPin = pipe(M.steel, 0.12, 0, -1.95, -1.34, 12);
+		feelerPin.position.set(...L(...F1), 0);
+		inner.add(feelerPin);
 		g.add(inner);
 		g.add(screw(M, 0, 0, -1.14, 1, 0.6));
 		const part = add({
 			id: 'grandLever',
 			name: 'Grand lever',
-			info: 'Cocked all day by the snail, it falls at midnight. On the last day of a short month its feeler drops deeper into the 48-month cam and gathers up to four days in one stroke.',
+			info: 'Cocked all day by the snail, it falls at midnight and its beak advances the date star. On the last day of a short month it falls further, into the 48-month cam, and advances the star up to four teeth (28 Feb → 1 Mar).',
 			group: 'calendar',
 			layer: 5.3,
 			object: g,
 		});
 		part.update = ({ state, dt }) => {
-			// Lift ~3.2° over the day. After a short month, the fall reaches into the cam's notch.
-			const lift = (3.2 * Math.PI) / 180;
+			// The snail cocks the lever anticlockwise through the day; at midnight
+			// it falls clockwise, one date-star tooth per extra day at month end.
+			updateCalendar(state, dt);
 			const sod = Math.max(0, state.secondsOfDay);
-			let target = -lift * (sod / 86_400);
-			if (state.date === 1) {
-				const prevLen = new Date(Date.UTC(state.year, state.month - 1, 0)).getUTCDate();
-				const k = 31 - prevLen;
-				target += ((k * 0.7 * Math.PI) / 180) * Math.max(0, 1 - sod / 1800);
-			}
+			const target = LEVER_LIFT * (sod / 86_400) - TOOTH_ON_LEVER * Math.max(0, cal.dateTeeth - 1);
 			inner.rotation.z = jumps.get('lever', target, TAU, dt, SNAP * 1.5);
 		};
 	}
@@ -257,12 +292,12 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 			if (month === 2) return year === 3 ? 0.5 : 0.75;
 			return [4, 6, 9, 11].includes(month) ? 0.26 : 0;
 		};
-		const feeler = Math.atan2(0.35, -lc.r + 0.1);
+		const feeler = Math.atan2(FEELER_CAM[1] - lc.y, FEELER_CAM[0] - lc.x);
 		const pts: Vec2[] = [];
 		const per = 6;
 		for (let m = 0; m < 48; m++) {
 			for (let k = 0; k < per; k++) {
-				const a = feeler + ((m + (k + 0.5) / per - 0.5) / 48) * TAU;
+				const a = feeler + ((m + (k + 0.5) / per) / 48) * TAU;
 				const edge = k === 0 || k === per - 1 ? 0.35 : 1;
 				pts.push([(lc.r - depth(m) * edge) * Math.cos(a), (lc.r - depth(m) * edge) * Math.sin(a)]);
 			}
@@ -297,6 +332,8 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 		const g = new THREE.Group();
 		g.position.set(x, y, 0);
 		g.add(slab(shape, -0.98, -0.8, M.steel, M.anglage, { bevel: 0.03, curveSegments: 3 }));
+		// The date star's pipe carries the central date hand.
+		if (key === 'date') g.add(pipe(M.steel, 1.2, 0.95, -0.8, 0.62));
 		const part = add({ id, name, info, group: 'calendar', layer: 6.2, object: g });
 		part.update = ({ state, dt }) => {
 			updateCalendar(state, dt);
@@ -363,7 +400,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 		add({
 			id: 'birthdayGate',
 			name: 'Birthday gate',
-			info: 'Only when the month cam shows September and the date star steps from 23 to 24 does this lever let the grand lever push the age counter forward.',
+			info: `Only when the month star shows ${MONTH_NAMES[config.birth.month - 1]} and the date star steps onto the ${ordinal(config.birth.day)} does this lever let the grand lever push the age counter forward.`,
 			group: 'counters',
 			layer: 5.3,
 			object: g,
@@ -387,7 +424,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 		const part = add({
 			id: 'moonDisc',
 			name: 'Moon disc',
-			info: '135 teeth, two moons: the precision moon phase, off by a day only every 122 years.',
+			info: '135 teeth and two moons, advanced 16 teeth every 7 days: a lunation of 29.531 days, off by one day only every 122 years.',
 			group: 'calendar',
 			layer: 7.6,
 			object: g,
@@ -493,18 +530,14 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 	{
 		const winHole = (x: number, y: number, w: number, h: number, r: number): SDF => box(x, y, w / 2, h / 2, 0, r);
 		const { x: mx, y: my } = SUBDIALS.seconds;
-		const hump = MOON_R + 0.04;
-		const humpL: Vec2 = [mx + MOON_ORBIT_R * Math.cos((135 * Math.PI) / 180), my + MOON_ORBIT_R * Math.sin((135 * Math.PI) / 180)];
-		const humpR: Vec2 = [mx + MOON_ORBIT_R * Math.cos((45 * Math.PI) / 180), my + MOON_ORBIT_R * Math.sin((45 * Math.PI) / 180)];
+		// Classic aperture: the moon's orbit arc above the subdial centre, with two
+		// humps at the new-moon positions. Their radius makes the hump edge cross
+		// the moon's centre exactly at first and last quarter.
+		const hump = 2 * MOON_ORBIT_R * Math.sin(Math.PI / 8);
 		const moonAperture: SDF = subtract(
-			intersect(circle(mx, my, MOON_ORBIT_R + MOON_R + 0.1), (x, y) => {
-				// Wedge between 45° and 135° seen from the subdial centre.
-				const dx = x - mx;
-				const dy = y - my;
-				return Math.max((dx - dy) * Math.SQRT1_2, (-dx - dy) * Math.SQRT1_2);
-			}),
-			circle(...humpL, hump),
-			circle(...humpR, hump),
+			intersect(circle(mx, my, MOON_ORBIT_R + MOON_R + 0.1), (_, y) => my - y),
+			circle(mx - MOON_ORBIT_R, my, hump),
+			circle(mx + MOON_ORBIT_R, my, hump),
 			circle(mx, my, MOON_ORBIT_R - MOON_R - 0.05),
 		);
 		const holes: SDF[] = [
@@ -589,7 +622,7 @@ export function buildDialSide(M: Mats, config: ResolvedConfig) {
 		const cm = mesh(capGeo, M.blued);
 		cm.position.z = 1.18;
 		cap.add(cm);
-		hand('handCap', 'Hand cap', 'Holds the hands on their pipes.', cap, 11.6, () => 0);
+		hand('handCap', 'Centre cap', 'A decorative blued cap over the hand pipes; the hands themselves are friction-fitted.', cap, 11.6, () => 0);
 	}
 	const sec = SUBDIALS.seconds;
 	hand('secondsHand', 'Small seconds', 'On the fourth wheel’s arbor; it ticks five times a second.', handMesh(subSdf(3.95, 1.1), { minX: -0.6, minY: -1.5, maxX: 0.6, maxY: 4.2 }, 0.5, M.blued, 0.06), 10.0, (s) => -TAU * turns(s.trainBeats, BEATS_PER_TURN.fourth), sec.x, sec.y);

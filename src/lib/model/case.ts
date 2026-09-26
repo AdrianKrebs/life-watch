@@ -224,15 +224,16 @@ export function buildCase(M: Mats, config: ResolvedConfig) {
 		crownGeo.rotateX(-Math.PI / 2);
 		crownGeo.translate(0, 24.9, STEM_Z);
 		g.add(mesh(toCreasedNormals(crownGeo, 0.9), M.gold));
-		const stem = new THREE.CylinderGeometry(0.42, 0.42, 12.3, 16);
-		stem.translate(0, 18.75, STEM_Z);
+		// The stem runs in from the pendant, stopping clear of the barrel.
+		const stem = new THREE.CylinderGeometry(0.42, 0.42, 7.8, 16);
+		stem.translate(0, 21.0, STEM_Z);
 		g.add(mesh(stem, M.steel));
-		// Winding and sliding pinions on the stem.
+		// Sliding (clutch) pinion inboard, winding pinion outboard towards the crown.
 		for (const [y, teeth] of [
-			[14.6, 14],
-			[16.1, 11],
+			[17.55, 11],
+			[18.3, 14],
 		] as [number, number][]) {
-			const p = pinion(M, teeth, 0.13, 30, -0.55, 0.9);
+			const p = pinion(M, teeth, 0.13, 30, -0.3, 0.6);
 			p.rotation.x = -Math.PI / 2;
 			p.position.set(0, y, STEM_Z);
 			g.add(p);
@@ -240,7 +241,7 @@ export function buildCase(M: Mats, config: ResolvedConfig) {
 		add({
 			id: 'crown',
 			name: 'Crown and stem',
-			info: 'Wind the watch through the crown; the stem’s pinions turn the crown wheel and ratchet on the barrel bridge.',
+			info: 'Wind the watch through the crown: the sliding pinion drives the winding pinion, which turns the crown wheel and ratchet on the barrel bridge.',
 			group: 'keyless',
 			layer: 1.2,
 			object: g,

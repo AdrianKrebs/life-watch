@@ -52,6 +52,22 @@ export function decal(tex: THREE.Texture, w: number, h: number, x: number, y: nu
 	return m;
 }
 
+/** Pillar from the main plate up to the underside of a bridge. */
+function pillar(M: Mats, x: number, y: number, r: number, zTop: number) {
+	const geo = latheZ(
+		[
+			[0, 0],
+			[r, 0],
+			[r, Z.mainPlateBack - zTop],
+			[0, Z.mainPlateBack - zTop],
+		],
+		24,
+	);
+	geo.rotateX(Math.PI);
+	geo.translate(x, y, Z.mainPlateBack);
+	return mesh(geo, M.anglage);
+}
+
 export function buildMovement(M: Mats, config: ResolvedConfig) {
 	const parts: Part[] = [];
 	const add = (p: Part) => {
@@ -69,6 +85,14 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 			[8.2, 0, 0.3],
 		];
 		const shape = discShape(MOVEMENT_R, holes);
+		// Pocket for the days drums of the life counter, under the barrel.
+		const pocket = new THREE.Path();
+		pocket.moveTo(-2.1, 4.4);
+		pocket.lineTo(-2.1, 8.0);
+		pocket.lineTo(2.1, 8.0);
+		pocket.lineTo(2.1, 4.4);
+		pocket.closePath();
+		shape.holes.push(pocket);
 		const m = slab(shape, Z.mainPlateBack, Z.mainPlateFront, M.plate, M.anglage, { bevel: 0.12, curveSegments: 40 });
 		const g = new THREE.Group();
 		g.add(m);
@@ -168,7 +192,7 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const p = pinion(M, C.pinion, C.pinionModule, B.teeth, -5.05, 0.5);
 		p.rotation.z = meshPhase(0, B.teeth, C.pinion, gBC); // barrel drives the centre pinion
 		centre.add(p);
-		centre.add(arbor(M, 0.28, Z.mainPlateFront + 0.2, Z.bridgesBack - 0.05));
+		centre.add(arbor(M, 0.28, Z.mainPlateFront + 0.6, Z.bridgesBack - 0.05));
 		const part = add({
 			id: 'centreWheel',
 			name: 'Centre wheel',
@@ -261,13 +285,11 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const stoneDirs = [Math.PI / 6, -Math.PI / 6];
 		const body: SDF = smoothUnion(
 			0.25,
-			circle(0, 0, 0.5),
+			circle(0, 0, 0.4),
 			capsule(0, 0, L - 0.25, 0, 0.2, 0.16),
 			// Fork horns around the slot for the impulse pin.
 			capsule(L - 0.35, 0.2, L + 0.3, 0.34, 0.1),
 			capsule(L - 0.35, -0.2, L + 0.3, -0.34, 0.1),
-			// Guard pin (dart).
-			capsule(L - 0.5, 0, L - 0.1, 0, 0.05),
 			// Pallet arms carrying the stones.
 			...locks.map(([x, y], i) => capsule(0, 0, x + Math.cos(stoneDirs[i]) * 0.7, y + Math.sin(stoneDirs[i]) * 0.7, 0.26)),
 		);
@@ -279,13 +301,25 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const inner = new THREE.Group();
 		g.add(inner);
 		inner.add(slab(shapes, -7.72, -7.5, M.steel, M.anglage, { bevel: 0.03 }));
+		// Guard pin (dart): on the fork's face above the slot, at the safety roller's level.
+		const dart = sdfShapes(capsule(L - 0.55, 0, L + 0.27, 0, 0.06, 0.035), { minX: L - 0.8, minY: -0.3, maxX: L + 0.5, maxY: 0.3 }, 0.01);
+		inner.add(slab(dart, -7.5, -7.41, M.steel, M.steel, { bevel: 0.01 }));
+		// Pallet stones: radial to the wheel, both leaning with their outer end
+		// ahead in the wheel's travel (draw), the locked tooth's corner on the
+		// locking face, and a slanted impulse face on the working end.
+		const stoneShape = polyShape([
+			[-0.45, -0.15],
+			[0.45, -0.15],
+			[0.45, 0.15],
+			[-0.28, 0.15],
+		]);
 		for (let i = 0; i < 2; i++) {
 			const [x, y] = locks[i];
 			const a = stoneDirs[i];
-			// Stones stand radially to the escape wheel, locking face inclined for draw.
-			const stone = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.3, 0.26), M.ruby);
-			stone.position.set(x + Math.cos(a) * 0.53, y + Math.sin(a) * 0.53, -7.56);
-			stone.rotation.z = a + (i === 0 ? 1 : -1) * 0.2;
+			const t: Vec2 = [-Math.sin(a), Math.cos(a)]; // wheel travel at the lock
+			const stone = slab(stoneShape, -7.69, -7.43, M.ruby, M.ruby, { bevel: 0.02, smooth: false });
+			stone.position.set(x + Math.cos(a) * 0.56 + t[0] * 0.15, y + Math.sin(a) * 0.56 + t[1] * 0.15, 0);
+			stone.rotation.z = a + 0.2;
 			inner.add(stone);
 		}
 		g.add(arbor(M, 0.14, Z.mainPlateBack - 0.05, -8.1));
@@ -350,7 +384,7 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const nScrews = 18;
 		for (let i = 0; i < nScrews; i++) {
 			const a = (i / nScrews) * TAU + Math.PI / nScrews;
-			const meanTime = i % (nScrews / 2) === 4;
+			const meanTime = [0, 8, 9, 17].includes(i); // pairs flanking each arm
 			const sg = new THREE.Group();
 			const head = latheZ(
 				[
@@ -371,32 +405,26 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 			holder.position.z = -8.4;
 			rot.add(holder);
 		}
-		// Roller table with the impulse jewel, pointing at the fork at rest.
+		// Double roller. The impulse roller sits behind the fork and its ruby pin
+		// reaches up into the slot; the safety roller, in front at the dart's
+		// level, has a crescent that lets the dart pass only while the pin is in the slot.
+		const pinAngle = lineOfCentres + Math.PI;
 		const roller = latheZ(
 			[
-				[0.12, -7.66],
-				[1.0, -7.66],
-				[1.0, -7.52],
-				[0.12, -7.52],
+				[0.12, -7.92],
+				[1.0, -7.92],
+				[1.0, -7.8],
+				[0.12, -7.8],
 			],
 			32,
 		);
 		rot.add(mesh(roller, M.steel));
-		const pinAngle = lineOfCentres + Math.PI;
-		const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.32, 12), M.ruby);
+		const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.38, 12), M.ruby);
 		pin.rotation.x = Math.PI / 2;
-		pin.position.set(TRAIN.impulseRadius * Math.cos(pinAngle), TRAIN.impulseRadius * Math.sin(pinAngle), -7.58);
+		pin.position.set(TRAIN.impulseRadius * Math.cos(pinAngle), TRAIN.impulseRadius * Math.sin(pinAngle), -7.73);
 		rot.add(pin);
-		const safety = latheZ(
-			[
-				[0.12, -7.86],
-				[0.52, -7.86],
-				[0.52, -7.72],
-				[0.12, -7.72],
-			],
-			24,
-		);
-		rot.add(mesh(safety, M.steel));
+		const safetySdf = subtract(circle(0, 0, 0.52), circle(0.62 * Math.cos(pinAngle), 0.62 * Math.sin(pinAngle), 0.22), circle(0, 0, 0.12));
+		rot.add(slab(sdfShapes(safetySdf, { minX: -0.6, minY: -0.6, maxX: 0.6, maxY: 0.6 }, 0.01), -7.5, -7.4, M.steel, M.steel, { bevel: 0.01 }));
 		rot.add(arbor(M, 0.2, Z.mainPlateBack - 0.05, Z.cockBack + 0.05));
 		// Hairspring collet.
 		const collet = latheZ(
@@ -443,14 +471,22 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 	const barrelHead = 6.8;
 	const barrelFeet: Vec2[] = [
 		[-14.0, 9.3],
-		[-8.4, 14.8],
-		[6.3, 13.3],
+		[-8.8, 15.3],
+		[6.8, 13.8],
 	];
 	const lobe: [Vec2, Vec2] = [
 		[-6.0, 10.6],
 		[-13.0, 8.4],
 	];
-	const crownWheel = { x: -0.65, y: 16.73, r: 1.75, teeth: 24 };
+	// Crown wheel on the ratchet's module (56 teeth on r 6): 16 teeth, r 1.71.
+	const ratchetModule = 12 / 56;
+	const crownWheel = { x: 0, y: 0, r: (16 * ratchetModule) / 2, teeth: 16 };
+	{
+		const d = 6 + crownWheel.r;
+		const a = (83 * Math.PI) / 180;
+		crownWheel.x = B.x + d * Math.cos(a);
+		crownWheel.y = B.y + d * Math.sin(a);
+	}
 	const barrelBridgeSdf: SDF = smoothUnion(
 		1.8,
 		circle(B.x, B.y, barrelHead),
@@ -496,6 +532,7 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const shapes = sdfShapes(barrelBridgeClip, bridgeBounds, 0.05);
 		const g = new THREE.Group();
 		g.add(slab(shapes, Z.bridgesBack, Z.bridgesFront, M.rhodium, M.anglage, { bevel: 0.14, curveSegments: 4 }));
+		for (const [x, y] of barrelFeet) g.add(pillar(M, x, y, 0.8, Z.bridgesFront));
 		const tex = engraving(
 			[
 				{ text: config.engraving[0], size: Math.min(0.9, 9 / Math.max(1, config.engraving[0].length)), y: 0.5, spacing: 0.24 },
@@ -521,6 +558,7 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const shapes = sdfShapes(trainBridgeSdf, bridgeBounds, 0.05);
 		const g = new THREE.Group();
 		g.add(slab(shapes, Z.bridgesBack, Z.bridgesFront, M.rhodium, M.anglage, { bevel: 0.14, curveSegments: 4 }));
+		for (const [x, y] of trainFeet) g.add(pillar(M, x, y, 0.75, Z.bridgesFront));
 		g.add(jewel(M, C.x, C.y, Z.bridgesBack, -1, 0.5, true));
 		g.add(jewel(M, T3.x, T3.y, Z.bridgesBack, -1, 0.45, true));
 		g.add(jewel(M, F4.x, F4.y, Z.bridgesBack, -1, 0.45, true));
@@ -528,7 +566,7 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		add({
 			id: 'trainBridge',
 			name: 'Train bridge',
-			info: 'Upper pivots of the centre, third, fourth and escape wheels, in rubies set in screwed gold chatons.',
+			info: 'Upper pivots of the centre, third, fourth and escape wheels; the first three rubies sit in screwed gold chatons.',
 			group: 'bridges',
 			layer: -6.0,
 			object: g,
@@ -540,6 +578,7 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const shapes = sdfShapes(sdf, bridgeBounds, 0.04);
 		const g = new THREE.Group();
 		g.add(slab(shapes, -8.05, -7.8, M.rhodium, M.anglage, { bevel: 0.06 }));
+		g.add(pillar(M, ...foot, 0.7, -7.8));
 		g.add(jewel(M, PF.x, PF.y, -8.05, -1, 0.36));
 		add({ id: 'palletCock', name: 'Pallet cock', info: 'Holds the pallet fork’s upper pivot, beneath the balance.', group: 'escapement', layer: -3.5, object: g });
 		add({ id: 'palletCockScrew', name: 'Screw', info: 'Heat-blued steel screw.', group: 'escapement', layer: -3.9, object: screw(M, ...foot, -8.05, -1, 0.62) });
@@ -587,26 +626,28 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 
 		const cw = new THREE.Group();
 		cw.position.set(crownWheel.x, crownWheel.y, 0);
-		const cwShape = polyShape(gearOutline({ teeth: crownWheel.teeth, module: (crownWheel.r * 2) / crownWheel.teeth, mate: n }));
+		const cwShape = polyShape(gearOutline({ teeth: crownWheel.teeth, module: ratchetModule, mate: n }));
 		const cwm = slab(cwShape, -10.0, Z.bridgesBack - 0.02, M.steelSunray, M.anglage, { bevel: 0.05 });
 		cw.add(cwm);
 		cw.add(screw(M, 0, 0, -10.0, -1, 0.7, false));
 		add({ id: 'crownWheel', name: 'Crown wheel', info: 'Takes the winding from the stem to the ratchet wheel. Held by a left-handed screw.', group: 'keyless', layer: -7.2, object: cw });
 
 		// Click and its spring stop the ratchet from running back.
-		const clickSdf = smoothUnion(0.3, circle(-8.9, 6.2, 0.55), capsule(-8.9, 6.2, -7.2, 7.2, 0.35, 0.18));
+		// Pivoted so the ratchet's load pulls the pawl in and winding lifts it out.
+		const clickSdf = smoothUnion(0.3, circle(-8.8, 8.35, 0.55), capsule(-8.8, 8.35, -7.2, 7.2, 0.35, 0.18));
 		const clickShapes = sdfShapes(clickSdf, bridgeBounds, 0.03);
 		const clickG = new THREE.Group();
 		clickG.add(slab(clickShapes, -9.95, Z.bridgesBack - 0.02, M.steel, M.anglage, { bevel: 0.04 }));
-		clickG.add(screw(M, -8.9, 6.2, -9.95, -1, 0.45));
+		clickG.add(screw(M, -8.8, 8.35, -9.95, -1, 0.45));
 		add({ id: 'click', name: 'Click', info: 'A sprung pawl on the ratchet wheel: you can wind, but the spring can’t unwind backwards.', group: 'keyless', layer: -7.2, object: clickG });
 	}
 
 	// ---------------------------------------------------------------- balance cock with regulator
 	{
 		const footDir = cockDir;
-		const foot: Vec2 = [BAL.x + 7.3 * Math.cos(footDir), BAL.y + 7.3 * Math.sin(footDir)];
-		const cockSdf = smoothUnion(0.9, circle(BAL.x, BAL.y, 2.0), capsule(BAL.x, BAL.y, ...foot, 1.15, 1.7), circle(...foot, 1.95));
+		// Foot outside the rim and its timing screws, inside the movement's edge.
+		const foot: Vec2 = [BAL.x + 7.8 * Math.cos(footDir), BAL.y + 7.8 * Math.sin(footDir)];
+		const cockSdf = smoothUnion(0.9, circle(BAL.x, BAL.y, 2.0), capsule(BAL.x, BAL.y, ...foot, 1.15, 1.25), circle(...foot, 1.3));
 		const shapes = sdfShapes(cockSdf, bridgeBounds, 0.04);
 		const g = new THREE.Group();
 		g.add(slab(shapes, Z.cockBack, -9.2, M.rhodium, M.anglage, { bevel: 0.13 }));
@@ -614,8 +655,8 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		const pillar = latheZ(
 			[
 				[0, 0],
-				[1.45, 0],
-				[1.45, 4.8],
+				[0.9, 0],
+				[0.9, 4.8],
 				[0, 4.8],
 			],
 			36,
@@ -635,7 +676,8 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 		);
 		const along = footDir;
 		const scalePos: Vec2 = [BAL.x + 4.9 * Math.cos(along), BAL.y + 4.9 * Math.sin(along)];
-		g.add(decal(scaleTex, 3.4, 1.8, scalePos[0], scalePos[1], Z.cockBack - 0.005, -1, along + Math.PI / 2, false));
+		// The decal is mirrored to face the back, so its rotation is too.
+		g.add(decal(scaleTex, 3.4, 1.8, scalePos[0], scalePos[1], Z.cockBack - 0.005, -1, -(along + Math.PI / 2), false));
 
 		// Regulator index: a long needle over the scale and two pins at the hairspring.
 		const indexSdf = smoothUnion(
@@ -665,7 +707,7 @@ export function buildMovement(M: Mats, config: ResolvedConfig) {
 			layer: -8.3,
 			object: g,
 		});
-		add({ id: 'cockScrew', name: 'Cock screw', info: 'Heat-blued steel screw.', group: 'cock', layer: -9.0, object: screw(M, ...foot, Z.cockBack, -1, 0.95) });
+		add({ id: 'cockScrew', name: 'Cock screw', info: 'Heat-blued steel screw.', group: 'cock', layer: -9.0, object: screw(M, ...foot, Z.cockBack, -1, 0.8) });
 	}
 
 	return { parts, hairspring };

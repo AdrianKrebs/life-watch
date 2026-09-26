@@ -233,7 +233,8 @@ export class Hairspring {
 		this.last = phi;
 		const { segments, turns, r0, pitch, thickness: t, height: h } = this;
 		const Theta = turns * Math.PI * 2;
-		const span = Theta + phi;
+		// The collet end turns with the balance; a CCW swing unwinds this CCW-outward spiral.
+		const span = Theta - phi;
 		const P = this.positions;
 		const N = this.normals;
 		const faces: [number, number, number, number, number, number][] = [
@@ -247,7 +248,7 @@ export class Hairspring {
 			const u = i / segments;
 			const theta = this.studAngle - span * (1 - u);
 			const rl = r0 + pitch * turns * u;
-			const r = rl - ((rl * rl * phi) / this.length) * Math.sin(Math.PI * u) * 0.9;
+			const r = rl + ((rl * rl * phi) / this.length) * Math.sin(Math.PI * u) * 0.9;
 			const c = Math.cos(theta);
 			const s = Math.sin(theta);
 			for (let f = 0; f < 4; f++) {
