@@ -1,0 +1,76 @@
+{
+  "name": "life-watch",
+  "version": "0.1.0",
+  "description": "A procedural mechanical pocket watch that counts your life: perpetual calendar, age in years and days, and a movement you can take apart. three.js + React.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Adrian Krebs (https://adriankrebs.ch)",
+  "homepage": "https://github.com/AdrianKrebs/life-watch#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AdrianKrebs/life-watch.git"
+  },
+  "bugs": "https://github.com/AdrianKrebs/life-watch/issues",
+  "keywords": [
+    "watch",
+    "horology",
+    "mechanical-watch",
+    "perpetual-calendar",
+    "three.js",
+    "react-three-fiber",
+    "webgl",
+    "web-component"
+  ],
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css",
+    "./element": "./dist/life-watch.js"
+  },
+  "sideEffects": [
+    "*.css",
+    "./dist/life-watch.js"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:lib && npm run build:element && npm run build:site",
+    "build:lib": "vite build -c vite.lib.config.ts && tsc -p tsconfig.lib.json",
+    "build:element": "vite build -c vite.element.config.ts",
+    "build:site": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build:lib && npm run build:element"
+  },
+  "peerDependencies": {
+    "@react-three/fiber": "^9.8.0",
+    "react": ">=19 <19.4",
+    "react-dom": ">=19 <19.4",
+    "three": ">=0.184.0 <0.187.0"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/postprocessing": "^3.1.2",
+    "postprocessing": "^6.39.5",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@react-three/fiber": "^9.8.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "three": "^0.186.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1"
+  }
+}

@@ -1,0 +1,354 @@
+/* Life watch: a vitrine on the page. Typography follows the site; the label
+   card borrows from the Patek Philippe Museum's object labels. */
+
+.lw-stage {
+	--lw-font-serif: 'Source Serif 4', Georgia, serif;
+	--lw-font-sans: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+	--lw-ink: #1d1b19;
+	--lw-muted: #6b655e;
+	--lw-card: rgba(255, 253, 249, 0.78);
+	--lw-line: rgba(40, 32, 22, 0.14);
+	--lw-accent: #5b7a3d;
+	position: relative;
+	width: 100%;
+	height: var(--lw-height, min(calc(100svh - 76px), 1080px));
+	min-height: 580px;
+	box-sizing: border-box;
+	background: #f4eee6;
+	overflow: hidden;
+	font-family: var(--lw-font-sans);
+	color: var(--lw-ink);
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.lw-loading {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	font-family: var(--lw-font-serif);
+	font-style: italic;
+	color: var(--lw-muted);
+	font-size: 1rem;
+	pointer-events: none;
+}
+
+/* Museum label ------------------------------------------------------------ */
+
+.lw-museum {
+	position: absolute;
+	top: 20px;
+	left: 20px;
+	display: flex;
+	gap: 14px;
+	align-items: flex-start;
+	max-width: 330px;
+	padding: 13px 14px 14px 16px;
+	background: var(--lw-card);
+	border: 1px solid var(--lw-line);
+	border-radius: 3px;
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 8px 24px -16px rgba(60, 40, 20, 0.35);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	font-size: 13px;
+	line-height: 1.38;
+}
+
+.lw-museum-body {
+	display: flex;
+	flex-direction: column;
+}
+
+.lw-museum strong {
+	font-weight: 600;
+	font-size: 13.5px;
+	margin-bottom: 2px;
+}
+
+.lw-museum-en {
+	font-style: italic;
+	color: var(--lw-muted);
+	margin-bottom: 4px;
+}
+
+.lw-museum-small {
+	margin-top: 6px;
+	color: var(--lw-muted);
+	font-size: 12px;
+}
+
+.lw-museum-inv {
+	position: absolute;
+	right: 10px;
+	bottom: 8px;
+	font-size: 10px;
+	color: var(--lw-muted);
+	letter-spacing: 0.04em;
+}
+
+.lw-listen {
+	flex: none;
+	width: 34px;
+	height: 34px;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	border: 1px solid var(--lw-line);
+	background: #fff;
+	color: var(--lw-ink);
+	cursor: pointer;
+	transition: background 0.2s ease, color 0.2s ease;
+}
+
+.lw-listen:hover {
+	background: #f3efe8;
+}
+
+.lw-listen.on {
+	background: var(--lw-ink);
+	color: #fff;
+}
+
+/* Reading ---------------------------------------------------------------- */
+
+.lw-reading {
+	position: absolute;
+	right: 22px;
+	top: 22px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
+	pointer-events: none;
+	text-align: right;
+}
+
+.lw-reading-age {
+	font-family: var(--lw-font-serif);
+	font-size: 21px;
+	font-variant-numeric: tabular-nums;
+	color: var(--lw-ink);
+	letter-spacing: -0.005em;
+}
+
+.lw-reading-date {
+	font-size: 13px;
+	color: var(--lw-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Controls ---------------------------------------------------------------- */
+
+.lw-controls {
+	position: absolute;
+	left: 50%;
+	bottom: 18px;
+	transform: translateX(-50%);
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	align-items: center;
+	gap: 10px 14px;
+	width: max-content;
+	max-width: calc(100% - 32px);
+}
+
+.lw-group {
+	display: flex;
+	padding: 3px;
+	gap: 2px;
+	background: var(--lw-card);
+	border: 1px solid var(--lw-line);
+	border-radius: 999px;
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+}
+
+.lw-group button {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 500;
+	color: var(--lw-ink);
+	padding: 6px 11px;
+	border-radius: 999px;
+	cursor: pointer;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lw-group button:hover {
+	background: rgba(40, 32, 22, 0.07);
+}
+
+.lw-group button.on {
+	background: var(--lw-ink);
+	color: #fff;
+}
+
+.lw-jumps button {
+	color: var(--lw-accent);
+}
+
+.lw-slider {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 11.5px;
+	color: var(--lw-muted);
+	padding: 6px 12px;
+	background: var(--lw-card);
+	border: 1px solid var(--lw-line);
+	border-radius: 999px;
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+}
+
+.lw-slider input {
+	width: 140px;
+	accent-color: var(--lw-ink);
+}
+
+/* Tooltip ---------------------------------------------------------------- */
+
+.lw-tooltip {
+	position: absolute;
+	left: 0;
+	top: 0;
+	max-width: 290px;
+	padding: 10px 12px;
+	background: #fffdf9;
+	border: 1px solid var(--lw-line);
+	border-radius: 4px;
+	box-shadow: 0 10px 30px -18px rgba(40, 25, 10, 0.5);
+	font-size: 12.5px;
+	line-height: 1.4;
+	color: var(--lw-muted);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.lw-tooltip.on {
+	opacity: 1;
+}
+
+.lw-tooltip strong {
+	color: var(--lw-ink);
+	font-weight: 600;
+	font-size: 13px;
+}
+
+/* Exploded-view labels ------------------------------------------------------ */
+
+.lw-labels {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	opacity: 0;
+}
+
+.lw-label {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+}
+
+.lw-leaders {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+.lw-leaders line {
+	stroke: rgba(40, 32, 22, 0.38);
+	stroke-width: 1;
+}
+
+.lw-leaders circle {
+	fill: var(--lw-ink);
+}
+
+.lw-label-box {
+	position: absolute;
+	left: 0;
+	transform: translateX(-50%);
+	white-space: nowrap;
+	font-size: 11.5px;
+	letter-spacing: 0.02em;
+	padding: 3px 8px;
+	background: var(--lw-card);
+	border: 1px solid var(--lw-line);
+	border-radius: 3px;
+}
+
+.lw-label[data-side='up'] .lw-label-box {
+	bottom: 0;
+}
+
+.lw-label[data-side='down'] .lw-label-box {
+	top: 0;
+}
+
+.lw-label-box strong {
+	font-weight: 600;
+}
+
+@media (max-width: 760px) {
+	.lw-stage {
+		height: calc(100svh - 64px);
+		min-height: 620px;
+	}
+	.lw-museum {
+		top: 12px;
+		left: 12px;
+		right: 12px;
+		max-width: none;
+		padding: 10px 12px;
+		font-size: 12px;
+	}
+	.lw-museum-small,
+	.lw-museum-inv {
+		display: none;
+	}
+	.lw-reading {
+		top: auto;
+		bottom: 150px;
+		right: 0;
+		left: 0;
+		align-items: center;
+		text-align: center;
+	}
+	.lw-reading-age {
+		font-size: 18px;
+	}
+	.lw-controls {
+		bottom: 12px;
+		gap: 8px;
+	}
+	.lw-group button {
+		padding: 6px 8px;
+		font-size: 12px;
+	}
+	.lw-slider {
+		display: none;
+	}
+	.lw-labels {
+		display: none;
+	}
+	.lw-tooltip {
+		max-width: 230px;
+	}
+}
